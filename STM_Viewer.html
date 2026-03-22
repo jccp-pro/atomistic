@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STM Simulation Viewer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --panel: #13161e;
+    --panel2: #1a1e28;
+    --border: #2a2f3e;
+    --accent: #4a9eff;
+    --accent2: #ff7a2f;
+    --text: #c8d0e0;
+    --text-dim: #6a7490;
+    --text-bright: #e8eaf0;
+    --green: #4ade80;
+    --red: #f87171;
+    --input-bg: #0d0f14;
+    --group-label: #8892aa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Title bar ─────────────────────────────────────── */
+  #titlebar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  #titlebar .logo {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  #titlebar .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── Main layout ────────────────────────────────────── */
+  #main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Control panel ──────────────────────────────────── */
+  #controls {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .group {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .group-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--group-label);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+  }
+  .group-body {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    align-items: center;
+  }
+  .row.four {
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 4px;
+  }
+
+  label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  select, input[type=number], input[type=text] {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-bright);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 4px 6px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input:focus {
+    border-color: var(--accent);
+  }
+  select { cursor: pointer; }
+
+  .full-width { grid-column: 1 / -1; }
+
+  /* Buttons */
+  .btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 7px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { filter: brightness(1.15); }
+  .btn-secondary {
+    background: var(--panel2);
+    color: var(--text);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Info table */
+  .info-table {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    gap: 4px 8px;
+    align-items: center;
+  }
+  .info-key {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+  .info-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 5px;
+    text-align: right;
+    min-width: 44px;
+  }
+
+  /* ── Plot area ──────────────────────────────────────── */
+  #plot-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
+    padding: 10px;
+    gap: 0;
+  }
+
+  /* canvas-wrap fills all remaining space in the plot area */
+  #canvas-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  /* Canvas container expands to fill the flex space */
+  #stm-canvas-container {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #stm-canvas {
+    image-rendering: pixelated;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 40px rgba(74,158,255,0.08);
+    cursor: crosshair;
+    /* display size set by JS to fill container while preserving aspect ratio */
+  }
+
+  /* Colorbar — slim fixed-width right column */
+  #colorbar-wrap {
+    flex-shrink: 0;
+    width: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  #colorbar-label-top, #colorbar-label-bot {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.2;
+  }
+  #colorbar-inner {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 4px;
+  }
+  #colorbar-canvas {
+    border: 1px solid var(--border);
+    width: 16px;
+    flex-shrink: 0;
+  }
+  #colorbar-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+
+  /* Placeholder — centres itself inside the flex plot area */
+  #placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: var(--text-dim);
+  }
+  #placeholder .icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+  #placeholder p {
+    font-size: 13px;
+    text-align: center;
+    max-width: 280px;
+    line-height: 1.6;
+  }
+  #placeholder code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--panel2);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  /* Toolbar */
+  #toolbar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 6px;
+  }
+  .tool-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 0;
+  }
+  .tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tool-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(74,158,255,0.1); }
+
+  /* Cursor tooltip */
+  #cursor-info {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  /* ── Status bar ─────────────────────────────────────── */
+  #statusbar {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 4px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+    min-height: 24px;
+  }
+  #statusbar .seg { display: flex; align-items: center; gap: 6px; }
+  #statusbar .seg-key { color: var(--text-dim); }
+  #statusbar .seg-val { color: var(--text-bright); }
+  #statusbar .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-dim);
+    display: inline-block;
+  }
+  #statusbar .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* File input hidden */
+  #file-input { display: none; }
+
+  /* Loading overlay */
+  #loading {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(13,15,20,0.8);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10;
+  }
+  #loading.show { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-dim); }
+
+  /* Demo data button */
+  .demo-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px dashed var(--accent2);
+    border-radius: 3px;
+    color: var(--accent2);
+    cursor: pointer;
+    background: none;
+    letter-spacing: 0.06em;
+  }
+  .demo-chip:hover { background: rgba(255,122,47,0.1); }
+
+  /* Zoom controls */
+  #zoom-controls {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="titlebar">
+  <span class="logo">⬡ STM VIEWER</span>
+  <span class="subtitle">VASP PARCHG Simulation — Web Edition</span>
+  <div style="flex:1"></div>
+  <button class="demo-chip" id="demo-btn">⚗ Load Demo Data</button>
+</div>
+
+<div id="main">
+  <!-- ── Controls ── -->
+  <div id="controls">
+
+    <div class="group">
+      <div class="group-title">File</div>
+      <div class="group-body">
+        <button class="btn-primary" id="load-btn">▲ Load PARCHG</button>
+        <input type="file" id="file-input" accept="*">
+        <div class="row">
+          <button class="btn-secondary" id="save-img-btn" disabled>⬇ Image</button>
+          <button class="btn-secondary" id="save-dat-btn" disabled>⬇ Data</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Parameters</div>
+      <div class="group-body">
+        <select id="iso-mode">
+          <option value="0">Iso Height</option>
+          <option value="1">Iso Current</option>
+        </select>
+
+        <div class="row four">
+          <label>Px</label>
+          <input type="number" id="repeat-x" value="1" min="1" max="10" step="1">
+          <label>Py</label>
+          <input type="number" id="repeat-y" value="1" min="1" max="10" step="1">
+        </div>
+
+        <div class="row four">
+          <label>Zc</label>
+          <input type="number" id="zcut" value="50" min="0" max="1500" step="1">
+          <label>Pc</label>
+          <input type="number" id="pc" value="50" min="0" max="99" step="1">
+        </div>
+
+        <div class="row four">
+          <label>σ</label>
+          <input type="number" id="sigma" value="2.0" min="0" max="10" step="0.1">
+          <label>Cmap</label>
+          <select id="cmap" style="font-size:10px">
+            <option value="blue_orange_yellow">blue_orange_yellow</option>
+            <option value="black_blue_orange">black_blue_orange</option>
+            <option value="black_blue_yellow">black_blue_yellow</option>
+            <option value="black_yellow_white">black_yellow_white</option>
+            <option value="hot">hot</option>
+            <option value="hot_r">hot_r</option>
+            <option value="viridis">viridis</option>
+            <option value="plasma">plasma</option>
+            <option value="inferno">inferno</option>
+            <option value="magma">magma</option>
+            <option value="gray">gray</option>
+            <option value="turbo">turbo</option>
+            <option value="blues">Blues</option>
+            <option value="coolwarm">coolwarm</option>
+          </select>
+        </div>
+
+        <div class="row four">
+          <label>min</label>
+          <input type="text" id="vmin" placeholder="auto">
+          <label>max</label>
+          <input type="text" id="vmax" placeholder="auto">
+        </div>
+
+        <button class="btn-primary" id="apply-btn">↻ Apply</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Grid Info</div>
+      <div class="group-body">
+        <div class="info-table">
+          <span class="info-key">NX =</span><span class="info-val" id="info-nx">—</span>
+          <span class="info-key">a =</span><span class="info-val" id="info-a">—</span>
+          <span class="info-key">NY =</span><span class="info-val" id="info-ny">—</span>
+          <span class="info-key">b =</span><span class="info-val" id="info-b">—</span>
+          <span class="info-key">NZ =</span><span class="info-val" id="info-nz">—</span>
+          <span class="info-key">c =</span><span class="info-val" id="info-c">—</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Plot Area ── -->
+  <div id="plot-area">
+    <div id="loading">
+      <div class="spinner"></div>
+      <p id="loading-msg">Processing...</p>
+    </div>
+
+    <div id="placeholder">
+      <div class="icon">🔬</div>
+      <p>Load a VASP <code>PARCHG</code> file to visualize STM simulation data, or click <strong>⚗ Load Demo Data</strong> to explore with a synthetic surface.</p>
+    </div>
+
+    <div id="canvas-wrap" style="display:none">
+      <div id="stm-canvas-container">
+        <canvas id="stm-canvas"></canvas>
+      </div>
+      <div id="colorbar-wrap">
+        <span id="colorbar-label-top">—</span>
+        <div id="colorbar-inner">
+          <canvas id="colorbar-canvas" width="16" height="200"></canvas>
+          <span id="colorbar-title">Charge Density</span>
+        </div>
+        <span id="colorbar-label-bot">—</span>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <button class="tool-btn" id="zoom-in-btn" title="Zoom in">＋</button>
+      <button class="tool-btn" id="zoom-out-btn" title="Zoom out">－</button>
+      <button class="tool-btn" id="zoom-reset-btn" title="Reset zoom">⊙</button>
+    </div>
+
+    <div id="cursor-info">x: — Å   y: — Å   val: —</div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <div class="seg"><span class="dot" id="status-dot"></span><span id="status-msg">Please load a PARCHG file</span></div>
+  <div class="seg" id="status-z" style="display:none">
+    <span class="seg-key">Zm =</span><span class="seg-val" id="sv-zm">—</span>
+    <span class="seg-key">Zn =</span><span class="seg-val" id="sv-zn">—</span>
+  </div>
+  <div class="seg" id="status-v" style="display:none">
+    <span class="seg-key">vmin =</span><span class="seg-val" id="sv-vmin">—</span>
+    <span class="seg-key">vmax =</span><span class="seg-val" id="sv-vmax">—</span>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// Colormaps
+// ══════════════════════════════════════════════════════
+function hexToRGB(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+function lerp(a,b,t){ return a+(b-a)*t; }
+function makeColormap(stops, n=256) {
+  // stops: array of [r,g,b]
+  const lut = new Uint8Array(n*3);
+  for(let i=0;i<n;i++){
+    const t = i/(n-1);
+    const s = t*(stops.length-1);
+    const idx = Math.floor(s);
+    const f = s-idx;
+    const c0 = stops[Math.min(idx,stops.length-1)];
+    const c1 = stops[Math.min(idx+1,stops.length-1)];
+    lut[i*3]   = Math.round(lerp(c0[0],c1[0],f));
+    lut[i*3+1] = Math.round(lerp(c0[1],c1[1],f));
+    lut[i*3+2] = Math.round(lerp(c0[2],c1[2],f));
+  }
+  return lut;
+}
+
+const CMAPS = {};
+(function(){
+  const h = hexToRGB;
+  CMAPS['blue_orange_yellow'] = makeColormap([
+    h('#000033'),h('#000066'),h('#0033aa'),h('#0066dd'),h('#3399ff'),
+    h('#ff6600'),h('#ff8800'),h('#ffaa00'),h('#ffcc00'),h('#ffee00'),
+    h('#ffff33'),h('#ffff99'),h('#ffffcc'),[255,255,255]]);
+  CMAPS['black_blue_orange'] = makeColormap([
+    [0,0,0],h('#000033'),h('#000066'),h('#0033cc'),h('#0066ff'),h('#ff8800'),h('#ffaa44')]);
+  CMAPS['black_blue_yellow'] = makeColormap([
+    [0,0,0],[0,0,139],[0,0,255],[0,255,255],[255,255,0]]);
+  CMAPS['black_yellow_white'] = makeColormap([
+    [0,0,0],h('#1a1a00'),h('#333300'),h('#666600'),h('#999900'),h('#cccc00'),
+    [255,255,0],h('#ffff33'),h('#ffff66'),h('#ffff99'),h('#ffffcc'),h('#ffffee')]);
+  CMAPS['hot'] = makeColormap([[0,0,0],[255,0,0],[255,255,0],[255,255,255]]);
+  CMAPS['hot_r'] = makeColormap([[255,255,255],[255,255,0],[255,0,0],[0,0,0]]);
+  CMAPS['viridis'] = makeColormap([
+    h('#440154'),h('#482878'),h('#3e4989'),h('#31688e'),h('#26828e'),
+    h('#1f9e89'),h('#35b779'),h('#6ece58'),h('#b5de2b'),h('#fde725')]);
+  CMAPS['plasma'] = makeColormap([
+    h('#0d0887'),h('#46039f'),h('#7201a8'),h('#9c179e'),h('#bd3786'),
+    h('#d8576b'),h('#ed7953'),h('#fb9f3a'),h('#fdcb26'),h('#f0f921')]);
+  CMAPS['inferno'] = makeColormap([
+    [0,0,4],h('#1b0c41'),h('#4a0c4e'),h('#781c6d'),h('#a52c60'),
+    h('#cf4446'),h('#ed6925'),h('#fb9b06'),h('#f7d13d'),h('#fcffa4')]);
+  CMAPS['magma'] = makeColormap([
+    [0,0,4],h('#140e36'),h('#3b0f70'),h('#641a80'),h('#8c2981'),
+    h('#b5367a'),h('#de4968'),h('#f7705c'),h('#fe9f6d'),h('#fecf92'),[255,252,253]]);
+  CMAPS['gray'] = makeColormap([[0,0,0],[255,255,255]]);
+  CMAPS['turbo'] = makeColormap([
+    h('#30123b'),h('#4454c4'),h('#4490fe'),h('#1fc8de'),h('#29efb2'),
+    h('#7ef658'),h('#c3f129'),h('#f1c03f'),h('#f57f1e'),h('#d4360b'),h('#7a0403')]);
+  CMAPS['blues'] = makeColormap([[247,251,255],[8,48,107]]);
+  CMAPS['Blues'] = CMAPS['blues'];
+  CMAPS['Blues_r'] = makeColormap([[8,48,107],[247,251,255]]);
+  CMAPS['coolwarm'] = makeColormap([h('#3b4cc0'),[255,255,255],h('#b40426')]);
+  CMAPS['coolwarm_r'] = makeColormap([h('#b40426'),[255,255,255],h('#3b4cc0')]);
+  CMAPS['bwr']   = makeColormap([h('#0000ff'),[255,255,255],h('#ff0000')]);
+  CMAPS['bwr_r'] = makeColormap([h('#ff0000'),[255,255,255],h('#0000ff')]);
+  CMAPS['seismic']   = makeColormap([[0,0,76],[0,0,255],[255,255,255],[255,0,0],[76,0,0]]);
+  CMAPS['seismic_r'] = makeColormap([[76,0,0],[255,0,0],[255,255,255],[0,0,255],[0,0,76]]);
+  CMAPS['RdBu']   = makeColormap([h('#67001f'),h('#f4a582'),[255,255,255],h('#92c5de'),h('#053061')]);
+  CMAPS['RdBu_r'] = makeColormap([h('#053061'),h('#92c5de'),[255,255,255],h('#f4a582'),h('#67001f')]);
+  CMAPS['RdYlBu']   = makeColormap([h('#a50026'),h('#f46d43'),h('#fee090'),[255,255,191],h('#74add1'),h('#4575b4'),h('#313695')]);
+  CMAPS['RdYlBu_r'] = makeColormap([h('#313695'),h('#4575b4'),h('#74add1'),[255,255,191],h('#fee090'),h('#f46d43'),h('#a50026')]);
+  CMAPS['twilight'] = makeColormap([[229,217,229],[168,135,180],[89,74,141],[37,38,90],[37,38,90],[89,74,141],[168,135,180],[229,217,229]]);
+  CMAPS['twilight_shifted'] = makeColormap([[37,38,90],[89,74,141],[168,135,180],[229,217,229],[229,217,229],[168,135,180],[89,74,141],[37,38,90]]);
+})();
+
+function getLUT(name){ return CMAPS[name] || CMAPS[name.toLowerCase()] || CMAPS['blue_orange_yellow']; }
+
+// ══════════════════════════════════════════════════════
+// PARCHG Parser (text format)
+// ══════════════════════════════════════════════════════
+function parsePARCHG(text) {
+  const lines = text.split('\n');
+  let li = 0;
+  const skip = () => { while(li < lines.length && lines[li].trim()==='') li++; };
+  // Line 0: comment
+  const comment = lines[li++];
+  // Line 1: scale factor
+  skip();
+  const scale = parseFloat(lines[li++]);
+  // Lines 2-4: lattice vectors
+  skip();
+  const cell = [];
+  for(let i=0;i<3;i++){ cell.push(lines[li++].trim().split(/\s+/).map(Number)); }
+  // Species names (optional) + counts
+  skip();
+  let specLine = lines[li].trim();
+  let species = [];
+  if(/^[A-Za-z]/.test(specLine)){ species = specLine.split(/\s+/); li++; }
+  skip();
+  const counts = lines[li++].trim().split(/\s+/).map(Number);
+  const natoms = counts.reduce((a,b)=>a+b,0);
+  // Selective dynamics (optional)
+  skip();
+  if(lines[li].trim().match(/^[Ss]/)) li++;
+  // Direct/Cartesian
+  skip();
+  li++; // skip coord type
+  // Atom positions
+  skip();
+  const positions = [];
+  for(let i=0;i<natoms;i++){
+    positions.push(lines[li++].trim().split(/\s+/).slice(0,3).map(Number));
+  }
+  // blank line
+  skip();
+  // Grid dimensions
+  skip();
+  const gridLine = lines[li++].trim().split(/\s+/).map(Number);
+  const [NX,NY,NZ] = gridLine;
+  // Density data
+  skip();
+  const nums = [];
+  while(li < lines.length && nums.length < NX*NY*NZ){
+    const row = lines[li++].trim();
+    if(!row) continue;
+    row.split(/\s+/).forEach(v=>{ if(v) nums.push(parseFloat(v)); });
+  }
+  if(nums.length < NX*NY*NZ) throw new Error(`Expected ${NX*NY*NZ} values, got ${nums.length}`);
+  // VASP stores in Fortran order: chg[ix][iy][iz]
+  const chg = new Float64Array(nums);
+  // Cell vectors
+  const scCell = cell.map(v=>v.map(x=>x*scale));
+  const a = Math.sqrt(scCell[0].reduce((s,x)=>s+x*x,0));
+  const b = Math.sqrt(scCell[1].reduce((s,x)=>s+x*x,0));
+  const c = Math.sqrt(scCell[2].reduce((s,x)=>s+x*x,0));
+  // z-positions of atoms (fractional -> cartesian z)
+  const zmax_pos = Math.max(...positions.map(p=>p[2]))*c;
+  const zmax_ind = Math.floor(zmax_pos/c*NZ)+1;
+  return { NX,NY,NZ, a,b,c, cell:scCell, chg, zmax_pos, zmax_ind };
+}
+
+// ══════════════════════════════════════════════════════
+// Gaussian blur (2D separable, periodic boundary)
+// data layout: data[ix*NY + iy]  — matches scipy.ndimage.gaussian_filter
+// ══════════════════════════════════════════════════════
+function gaussianBlur2D(data, NX, NY, sigma) {
+  if(sigma <= 0) return data;
+  const radius = Math.ceil(3*sigma);
+  const kernel = [];
+  let sum = 0;
+  for(let i=-radius;i<=radius;i++){ const v=Math.exp(-0.5*i*i/(sigma*sigma)); kernel.push(v); sum+=v; }
+  for(let i=0;i<kernel.length;i++) kernel[i]/=sum;
+  const tmp = new Float64Array(NX*NY);
+  const out = new Float64Array(NX*NY);
+  // X pass (over ix axis)
+  for(let iy=0;iy<NY;iy++){
+    for(let ix=0;ix<NX;ix++){
+      let acc=0;
+      for(let k=-radius;k<=radius;k++){
+        const xx = ((ix+k)%NX+NX)%NX;
+        acc += data[xx*NY+iy]*kernel[k+radius];
+      }
+      tmp[ix*NY+iy]=acc;
+    }
+  }
+  // Y pass (over iy axis)
+  for(let ix=0;ix<NX;ix++){
+    for(let iy=0;iy<NY;iy++){
+      let acc=0;
+      for(let k=-radius;k<=radius;k++){
+        const yy = ((iy+k)%NY+NY)%NY;
+        acc += tmp[ix*NY+yy]*kernel[k+radius];
+      }
+      out[ix*NY+iy]=acc;
+    }
+  }
+  return out;
+}
+
+// ══════════════════════════════════════════════════════
+// Iso-height slice
+// chg stored in C order: chg[ix * NY*NZ + iy * NZ + iz]
+// Returns dat[ix, iy] = chg[ix, iy, zcut]  (shape NX×NY, row-major ix)
+// Matches original: chg_n[:, :, zcut]  → shape (NX, NY)
+// ══════════════════════════════════════════════════════
+function isoHeight(parchg, zcut) {
+  const {NX,NY,NZ,chg} = parchg;
+  // VASP file storage (Fortran order): ix fastest, iy middle, iz slowest
+  // flat index = iz*NX*NY + iy*NX + ix
+  // dat layout: dat[ix*NY + iy]  (matches Python chg_n[ix,iy,zcut])
+  const dat = new Float64Array(NX*NY);
+  for(let ix=0;ix<NX;ix++)
+    for(let iy=0;iy<NY;iy++)
+      dat[ix*NY + iy] = chg[zcut*NX*NY + iy*NX + ix];
+  return dat;
+}
+
+// ══════════════════════════════════════════════════════
+// Iso-current
+// Returns dat[ix*NY + iy] = best z-index
+// Matches original: chg_n[:, :, zmin:zmax] argmin over axis=2 → (NX, NY)
+// ══════════════════════════════════════════════════════
+function isoCurrent(parchg, zcut, pc=50, ext=0.15) {
+  // Same fast z-first algorithm as isoCurrentAsync but synchronous (used internally)
+  const {NX, NY, NZ, chg, zmax_ind} = parchg;
+  const zext = Math.floor(NZ * ext);   // matches Python int(NZ*ext)
+  const zmin = Math.max(zcut - zext, zmax_ind);
+  const zmax = Math.min(zcut + zext, NZ - 1);
+  const nz   = zmax - zmin;
+
+  const avgs = new Float64Array(nz);
+  for (let zi = 0; zi < nz; zi++) {
+    const z = zmin + zi;
+    let s = 0;
+    for (let iy = 0; iy < NY; iy++)
+      for (let ix = 0; ix < NX; ix++)
+        s += chg[z*NX*NY + iy*NX + ix];
+    avgs[zi] = s / (NX * NY);
+  }
+  const sorted = Float64Array.from(avgs).sort();
+  const fidx = (pc / 100) * (sorted.length - 1);
+  const lo = Math.floor(fidx), hi = Math.ceil(fidx);
+  const c  = sorted[lo] + (fidx - lo) * (sorted[hi] - sorted[lo]);
+
+  const dat      = new Int32Array(NX * NY);
+  const bestDiff = new Float64Array(NX * NY).fill(Infinity);
+  for (let zi = 0; zi < nz; zi++) {
+    const z     = zmin + zi;
+    const zBase = z * NX * NY;
+    for (let iy = 0; iy < NY; iy++) {
+      const yBase = iy * NX;
+      for (let ix = 0; ix < NX; ix++) {
+        const flatXY = ix * NY + iy;
+        const d = Math.abs(chg[zBase + yBase + ix] - c);
+        if (d < bestDiff[flatXY]) { bestDiff[flatXY] = d; dat[flatXY] = z; }
+      }
+    }
+  }
+  return dat;
+}
+
+
+// ══════════════════════════════════════════════════════
+// Coordinate geometry — matches Python generate_data exactly.
+//
+// Python:
+//   a = (cell[0,0] + cell[0,1]*1j) / NX    ← complex step per ix
+//   b = (cell[1,0] + cell[1,1]*1j) / NY    ← complex step per iy
+//   gx, gy = mgrid[0:NX*rx, 0:NY*ry]       ← gx is ix axis, gy is iy axis
+//   stm_x[ix,iy] = real(ix*a + iy*b) = ix*cell[0][0]/NX + iy*cell[1][0]/NY
+//   stm_y[ix,iy] = imag(ix*a + iy*b) = ix*cell[0][1]/NX + iy*cell[1][1]/NY
+//   pcolormesh(stm_x, stm_y, stm_data[ix,iy])
+//
+// Lattice matrix M (grid index → real-space Å):
+//   x = ix * M[0][0]  +  iy * M[0][1]      M[0][0] = cell[0][0]/NX
+//   y = ix * M[1][0]  +  iy * M[1][1]      M[0][1] = cell[1][0]/NY
+//                                           M[1][0] = cell[0][1]/NX
+//                                           M[1][1] = cell[1][1]/NY
+// ══════════════════════════════════════════════════════
+function buildCoords(dat, parchg, repeatX, repeatY) {
+  const {NX, NY, cell} = parchg;
+
+  // Lattice matrix elements
+  const M00 = cell[0][0] / NX;   // dx per ix
+  const M10 = cell[0][1] / NX;   // dy per ix
+  const M01 = cell[1][0] / NY;   // dx per iy
+  const M11 = cell[1][1] / NY;   // dy per iy
+
+  const W = NX * repeatX;  // total ix steps
+  const H = NY * repeatY;  // total iy steps
+
+  // Real-space corners of the tiled parallelogram
+  const corners = [
+    [0,             0            ],
+    [W*M00,         W*M10        ],
+    [H*M01,         H*M11        ],
+    [W*M00 + H*M01, W*M10 + H*M11]
+  ];
+  const xmin = Math.min(...corners.map(c => c[0]));
+  const xmax = Math.max(...corners.map(c => c[0]));
+  const ymin = Math.min(...corners.map(c => c[1]));
+  const ymax = Math.max(...corners.map(c => c[1]));
+
+  // Determinant of M (for inversion)
+  const det = M00*M11 - M01*M10;
+
+  return { M00, M10, M01, M11, det,
+           W, H, NX, NY, repeatX, repeatY,
+           xmin, xmax, ymin, ymax, dat };
+}
+
+// ══════════════════════════════════════════════════════
+// Render STM image with correct lattice-vector orientation.
+//
+// We rasterise into a pixel grid whose dimensions (in pixels)
+// are proportional to the real-space bounding box of the
+// parallelogram.  Pixel density is set to PIXELS_PER_ANG so
+// that the image has high enough resolution regardless of cell
+// size.  For every output pixel we compute the real-space (x,y),
+// invert M to get fractional (ixf,iyf), then look up dat with
+// periodic wrapping — exactly reproducing what pcolormesh does.
+// ══════════════════════════════════════════════════════
+function renderSTM(canvas, coords, lut, vmin, vmax) {
+  const {M00, M10, M01, M11, det, W, H, NX, NY,
+         xmin, xmax, ymin, ymax, dat} = coords;
+
+  const bbW = xmax - xmin;   // real-space width  (Å)
+  const bbH = ymax - ymin;   // real-space height (Å)
+
+  // Pixel density: aim for at least one pixel per grid point in
+  // each direction, and at least 600 px on the long side.
+  const minPx  = 600;
+  const aspect = bbW / (bbH || 1);
+  let pxW, pxH;
+  if (aspect >= 1) {
+    pxW = Math.max(NX * coords.repeatX, minPx);
+    pxH = Math.max(NY * coords.repeatY, Math.round(pxW / aspect));
+  } else {
+    pxH = Math.max(NY * coords.repeatY, minPx);
+    pxW = Math.max(NX * coords.repeatX, Math.round(pxH * aspect));
+  }
+
+  canvas.width  = pxW;
+  canvas.height = pxH;
+
+  const ctx    = canvas.getContext('2d');
+  const img    = ctx.createImageData(pxW, pxH);
+  const pixels = img.data;
+  const range  = (vmax - vmin) || 1;
+
+  // Step sizes in real-space per output pixel
+  const dx = bbW / pxW;
+  const dy = bbH / pxH;
+
+  // Inverse matrix of M:  (ix,iy) = M^-1 * (x,y)
+  //   ix = ( x*M11 - y*M01) / det
+  //   iy = (-x*M10 + y*M00) / det
+  const iM00 =  M11 / det;   // d(ix)/dx
+  const iM01 = -M01 / det;   // d(ix)/dy
+  const iM10 = -M10 / det;   // d(iy)/dx
+  const iM11 =  M00 / det;   // d(iy)/dy
+
+  let ptr = 0;
+  for (let py = 0; py < pxH; py++) {
+    // py=0 → top of image → ymax (y increases upward in real-space)
+    const ry = ymax - (py + 0.5) * dy;
+    // Precompute row-constant contributions
+    const ixRowConst = ry * iM01;
+    const iyRowConst = ry * iM11;
+    for (let px = 0; px < pxW; px++) {
+      const rx = xmin + (px + 0.5) * dx;
+      const ixf = rx * iM00 + ixRowConst;
+      const iyf = rx * iM10 + iyRowConst;
+      // Periodic wrapping into [0,NX) and [0,NY)
+      const ix = ((Math.floor(ixf) % NX) + NX) % NX;
+      const iy = ((Math.floor(iyf) % NY) + NY) % NY;
+      const val = dat[ix * NY + iy];
+      const t = Math.max(0, Math.min(1, (val - vmin) / range));
+      const ci = Math.floor(t * 255) * 3;
+      pixels[ptr++] = lut[ci];
+      pixels[ptr++] = lut[ci + 1];
+      pixels[ptr++] = lut[ci + 2];
+      pixels[ptr++] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  canvas.style.transform = '';  // clear any stale CSS transform
+}
+function renderColorbar(canvas, lut) {
+  // canvas.height is set by caller; canvas.width=16 fixed
+  canvas.width = 16;
+  const h = canvas.height || 300;
+  const ctx = canvas.getContext('2d');
+  const imgCB = ctx.createImageData(16, h);
+  for(let i=0; i<h; i++){
+    const t = 1 - (i / (h-1));
+    const ci = Math.floor(t*255)*3;
+    for(let x=0; x<16; x++){
+      const p = (i*16+x)*4;
+      imgCB.data[p]   = lut[ci];
+      imgCB.data[p+1] = lut[ci+1];
+      imgCB.data[p+2] = lut[ci+2];
+      imgCB.data[p+3] = 255;
+    }
+  }
+  ctx.putImageData(imgCB, 0, 0);
+}
+
+// ══════════════════════════════════════════════════════
+// Demo data generator
+// ══════════════════════════════════════════════════════
+function generateDemoData() {
+  // Cell geometry similar to benchmark: elongated supercell with shear
+  // a = [6.67, 0, 0],  b = [-3.33, 28.51, 0]  (tilted like the reference image)
+  // NX=72, NY=144 (half of benchmark NY for speed), NZ=180
+  const NX=72, NY=144, NZ=180;
+  const cell = [
+    [ 6.67,  0.0,   0 ],   // a-vector
+    [-3.33,  28.51, 0 ],   // b-vector (has negative x-component → left-leaning parallelogram)
+    [ 0,     0,    18.18]  // c-vector
+  ];
+  const chg = new Float64Array(NX*NY*NZ);
+  const zmax_ind = 110;  // atom top layer
+  // Surface features: periodic bumps along both directions
+  for(let ix=0;ix<NX;ix++){
+    for(let iy=0;iy<NY;iy++){
+      for(let iz=0;iz<NZ;iz++){
+        let val = 0;
+        const fz = (iz - zmax_ind) / NZ;
+        // Substrate periodic corrugation (mimics molecular rows)
+        const hx = 2*Math.PI * ix / NX * 2;
+        const hy = 2*Math.PI * iy / NY * 8;  // 4× denser along b (long direction)
+        const corr = 0.5*(Math.cos(hx) + Math.cos(hy) + 0.3*Math.cos(hx+hy));
+        val += corr * Math.exp(-Math.max(0, fz) * 3);
+        // Height-decaying envelope
+        val *= Math.exp(-Math.max(0, fz) * 6);
+        val += 5e-4 * (Math.random() - 0.5);
+        // VASP Fortran order: ix fastest, iy middle, iz slowest
+        chg[iz*NX*NY + iy*NX + ix] = Math.max(0, val);
+      }
+    }
+  }
+  const a = Math.sqrt(cell[0][0]**2 + cell[0][1]**2);
+  const b = Math.sqrt(cell[1][0]**2 + cell[1][1]**2);
+  const c = 18.18;
+  const zmax_pos = zmax_ind / NZ * c;
+  return { NX, NY, NZ, a, b, c, cell, chg, zmax_pos, zmax_ind };
+}
+
+// ══════════════════════════════════════════════════════
+// App state
+// ══════════════════════════════════════════════════════
+let state = {
+  parchg: null,
+  filename: null,
+  stmData: null,
+  rawData: null,   // pre-blur data — cached for cmap/vmin/vmax re-renders
+  NX:0, NY:0,
+  zoomScale: 1,
+};
+
+function setStatus(msg, ok=false) {
+  document.getElementById('status-msg').textContent = msg;
+  document.getElementById('status-dot').className = 'dot'+(ok?' green':'');
+}
+
+function updateInfoPanel(p) {
+  document.getElementById('info-nx').textContent = p.NX;
+  document.getElementById('info-ny').textContent = p.NY;
+  document.getElementById('info-nz').textContent = p.NZ;
+  document.getElementById('info-a').textContent = p.a.toFixed(2)+'Å';
+  document.getElementById('info-b').textContent = p.b.toFixed(2)+'Å';
+  document.getElementById('info-c').textContent = p.c.toFixed(2)+'Å';
+}
+
+function updateStatusBar(data, p, isoMode, zcut) {
+  const zm = p.zmax_pos;
+  const zn = (zcut/p.NZ*p.c).toFixed(2);
+  document.getElementById('sv-zm').textContent = zm.toFixed(2)+' Å';
+  document.getElementById('sv-zn').textContent = zn+' Å';
+  document.getElementById('sv-vmin').textContent = data.min.toExponential(2);
+  document.getElementById('sv-vmax').textContent = data.max.toExponential(2);
+  document.getElementById('status-z').style.display='';
+  document.getElementById('status-v').style.display='';
+}
+
+function showLoading(msg='Processing...') {
+  document.getElementById('loading-msg').textContent=msg;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+
+// Chunked async isoCurrent so the browser doesn't freeze on large grids
+function isoCurrentAsync(parchg, zcut, pc, callback, ext=0.15) {
+  // Run the entire computation in a Web Worker (separate thread).
+  // This matches how Python uses scipy/numpy compiled C — the main
+  // thread stays fully responsive and there is no chunking overhead.
+  const {NX, NY, NZ, chg, zmax_ind} = parchg;
+
+  // Worker code as a blob so no external file is needed.
+  // We transfer the chg buffer (zero-copy) to the worker.
+  const workerSrc = `
+    self.onmessage = function(e) {
+      const {NX, NY, NZ, zcut, pc, zmax_ind, ext} = e.data;
+      const chg = new Float64Array(e.data.chg);   // ArrayBuffer → typed view
+      const zext = Math.floor(NZ * ext);   // matches Python int(NZ*ext)
+      const zmin = Math.max(zcut - zext, zmax_ind);
+      const zmax = Math.min(zcut + zext, NZ - 1);
+      const nz   = zmax - zmin;
+
+      if (nz <= 0) {
+        const out = new Int32Array(NX * NY).fill(zmin);
+        self.postMessage({out: out.buffer}, [out.buffer]);
+        return;
+      }
+
+      // Layer averages (one per z-slice)
+      const avgs = new Float64Array(nz);
+      for (let zi = 0; zi < nz; zi++) {
+        const base = (zmin + zi) * NX * NY;
+        let s = 0;
+        for (let k = 0; k < NX * NY; k++) s += chg[base + k];
+        avgs[zi] = s / (NX * NY);
+      }
+
+      // Percentile threshold (matches np.percentile linear interpolation)
+      const sorted = Float64Array.from(avgs).sort();
+      const fidx = (pc / 100) * (sorted.length - 1);
+      const lo = Math.floor(fidx), hi = Math.ceil(fidx);
+      const c  = sorted[lo] + (fidx - lo) * (sorted[hi] - sorted[lo]);
+
+      // Z-first argmin sweep with matched memory layout:
+      // Both chg and dat use [z*NX*NY + iy*NX + ix] storage,
+      // so reads AND writes are sequential — no stride penalty.
+      const dat      = new Int32Array(NX * NY);
+      const bestDiff = new Float64Array(NX * NY).fill(Infinity);
+
+      for (let zi = 0; zi < nz; zi++) {
+        const z     = zmin + zi;
+        const zBase = z * NX * NY;
+        // Sweep the entire z-slice as a flat block — cache-optimal
+        for (let k = 0; k < NX * NY; k++) {
+          const d = Math.abs(chg[zBase + k] - c);
+          if (d < bestDiff[k]) { bestDiff[k] = d; dat[k] = z; }
+        }
+      }
+
+      // dat is in [iy*NX + ix] layout here (matches VASP flat order).
+      // Caller expects [ix*NY + iy] layout — transpose.
+      const out = new Int32Array(NX * NY);
+      for (let iy = 0; iy < NY; iy++)
+        for (let ix = 0; ix < NX; ix++)
+          out[ix * NY + iy] = dat[iy * NX + ix];
+
+      // Transfer result back (zero-copy)
+      self.postMessage({out: out.buffer}, [out.buffer]);
+    };
+  `;
+
+  const blob   = new Blob([workerSrc], {type: 'application/javascript'});
+  const url    = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+
+  // Copy chg buffer to worker. ArrayBuffer.slice() is a fast C memcpy —
+  // for a 72×288×180 grid this is ~27MB, takes <5ms, and leaves the
+  // main-thread buffer intact for subsequent renders.
+  const chgCopy = chg.buffer.slice(0);
+  worker.postMessage(
+    {chg: chgCopy, NX, NY, NZ, zcut, pc, zmax_ind, ext},
+    [chgCopy]
+  );
+
+  worker.onmessage = (e) => {
+    worker.terminate();
+    URL.revokeObjectURL(url);
+    const out = new Int32Array(e.data.out);
+    callback(out);
+  };
+
+  worker.onerror = (e) => {
+    worker.terminate();
+    URL.revokeObjectURL(url);
+    console.error('Worker error:', e);
+  };
+}
+// After raw data computed, do blur+render
+function finishRender(raw, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, vminInput, vmaxInput) {
+  // Cache raw (pre-blur) so cmap/vmin/vmax changes can re-render without recompute
+  if (raw !== state.rawData) state.rawData = raw;
+  const blurred = gaussianBlur2D(raw, p.NX, p.NY, sigma);
+
+  const dmin = blurred.reduce((a,v)=>Math.min(a,v), Infinity);
+  const dmax = blurred.reduce((a,v)=>Math.max(a,v), -Infinity);
+  const vmin = isNaN(vminInput) ? dmin : vminInput;
+  const vmax = isNaN(vmaxInput) ? dmax : vmaxInput;
+
+  state.stmData = blurred;
+  state.NX = p.NX; state.NY = p.NY;
+
+  const lut    = getLUT(cmapName);
+  const canvas = document.getElementById('stm-canvas');
+  const coords = buildCoords(blurred, p, repeatX, repeatY);
+  state.coords = coords;
+  renderSTM(canvas, coords, lut, vmin, vmax);
+
+  // Scale canvas to fill available container
+  const container = document.getElementById('stm-canvas-container');
+  const availW = container.clientWidth  || 600;
+  const availH = container.clientHeight || 600;
+  const sc = Math.min(availW / canvas.width, availH / canvas.height) * state.zoomScale;
+  canvas.style.width  = Math.round(canvas.width  * sc) + 'px';
+  canvas.style.height = Math.round(canvas.height * sc) + 'px';
+
+  const cbCanvas = document.getElementById('colorbar-canvas');
+  const cbH = Math.round(canvas.height * sc);
+  cbCanvas.style.height = Math.max(cbH, 60) + 'px';
+  cbCanvas.height = Math.max(cbH, 60);
+  renderColorbar(cbCanvas, lut);
+  const fmtVal = (v, mode) => mode===1 ? Math.round(v).toString() : v.toExponential(2);
+  document.getElementById('colorbar-label-top').textContent = fmtVal(vmax, isoMode);
+  document.getElementById('colorbar-label-bot').textContent = fmtVal(vmin, isoMode);
+  document.getElementById('colorbar-title').textContent =
+    isoMode===0 ? 'Charge Density' : 'Height (z-index)';
+
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('canvas-wrap').style.display = 'flex';
+
+  updateStatusBar({min:dmin, max:dmax}, p, isoMode, zcut);
+  setStatus(`Rendered — ${p.NX}×${p.NY}×${p.NZ} grid`, true);
+  document.getElementById('save-img-btn').disabled = false;
+  document.getElementById('save-dat-btn').disabled = false;
+  hideLoading();
+}
+
+function generate() {
+  const p = state.parchg;
+  if(!p){ setStatus('No data loaded.'); return; }
+
+  const isoMode  = parseInt(document.getElementById('iso-mode').value);
+  const zcutRaw  = parseInt(document.getElementById('zcut').value);
+  const zcut     = Math.min(isNaN(zcutRaw) ? 50 : zcutRaw, p.NZ-1);
+  const pcRaw    = parseInt(document.getElementById('pc').value);
+  const pc       = isNaN(pcRaw) ? 50 : pcRaw;
+  const sigma    = parseFloat(document.getElementById('sigma').value)||0;
+  const repeatX  = Math.max(1, parseInt(document.getElementById('repeat-x').value)||1);
+  const repeatY  = Math.max(1, parseInt(document.getElementById('repeat-y').value)||1);
+  const cmapName = document.getElementById('cmap').value;
+  const vminInput = parseFloat(document.getElementById('vmin').value);
+  const vmaxInput = parseFloat(document.getElementById('vmax').value);
+
+  showLoading(isoMode===0 ? 'Computing iso-height...' : 'Computing iso-current (may take a moment)...');
+
+  if (isoMode === 0) {
+    setTimeout(() => {
+      try {
+        const raw = isoHeight(p, zcut);
+        finishRender(raw, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, vminInput, vmaxInput);
+      } catch(e) { setStatus('Error: '+e.message); console.error(e); hideLoading(); }
+    }, 20);
+  } else {
+    // IsoCurrent is heavy — run in chunked async loop so UI stays responsive
+    isoCurrentAsync(p, zcut, pc, (raw) => {
+      try {
+        finishRender(raw, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, vminInput, vmaxInput);
+      } catch(e) { setStatus('Error: '+e.message); console.error(e); hideLoading(); }
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// File loading
+// ══════════════════════════════════════════════════════
+document.getElementById('load-btn').onclick = () => document.getElementById('file-input').click();
+
+document.getElementById('file-input').onchange = (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  state.filename = file.name;
+  showLoading('Reading file...');
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const text = ev.target.result;
+      showLoading('Parsing PARCHG...');
+      setTimeout(()=>{
+        try {
+          const p = parsePARCHG(text);
+          state.parchg = p;
+          updateInfoPanel(p);
+          const initZcut = Math.min(p.zmax_ind+10, p.NZ-1);
+          document.getElementById('zcut').value = initZcut;
+          document.getElementById('zcut').max = p.NZ-1;
+          generate();
+          setStatus(`Loaded: ${file.name}`, true);
+        } catch(err) {
+          hideLoading();
+          setStatus('Parse error: '+err.message);
+          console.error(err);
+        }
+      },20);
+    } catch(err){ hideLoading(); setStatus('Read error: '+err.message); }
+  };
+  reader.readAsText(file);
+};
+
+// Demo data
+document.getElementById('demo-btn').onclick = () => {
+  showLoading('Generating demo surface...');
+  setTimeout(()=>{
+    const p = generateDemoData();
+    state.parchg = p;
+    state.filename = 'DEMO_PARCHG';
+    updateInfoPanel(p);
+    document.getElementById('zcut').value = p.zmax_ind+10;
+    document.getElementById('zcut').max = p.NZ-1;
+    hideLoading();
+    generate();
+    setStatus('Demo data loaded — synthetic STM surface', true);
+  },30);
+};
+
+// Apply button
+document.getElementById('apply-btn').onclick = () => generate();
+
+// ── Live parameter handlers — match Python behaviour exactly ──────────────
+
+// Iso mode: if switching to iso-current and pc was cleared, reset to 50
+document.getElementById('iso-mode').onchange = () => {
+  if (!state.parchg) return;
+  const isoMode = parseInt(document.getElementById('iso-mode').value);
+  if (isoMode === 1) {
+    const pcVal = parseInt(document.getElementById('pc').value);
+    if (isNaN(pcVal)) document.getElementById('pc').value = 50;
+  }
+  generate();
+};
+
+// Zcut: always regenerates; in iso-height mode clear pc (python: pc=None)
+document.getElementById('zcut').onchange = () => {
+  if (!state.parchg) return;
+  document.getElementById('vmin').value = '';
+  document.getElementById('vmax').value = '';
+  const isoMode = parseInt(document.getElementById('iso-mode').value);
+  if (isoMode === 0) document.getElementById('pc').value = '';
+  generate();
+};
+
+// Pc: only regenerates in iso-current mode (python: pc_changed checks iso_mode==1)
+document.getElementById('pc').onchange = () => {
+  if (!state.parchg) return;
+  const isoMode = parseInt(document.getElementById('iso-mode').value);
+  if (isoMode === 1) {
+    document.getElementById('vmin').value = '';
+    document.getElementById('vmax').value = '';
+    generate();
+  }
+};
+
+// Sigma: always regenerates (python: sigma_changed always calls generate_data)
+document.getElementById('sigma').onchange = () => {
+  if (!state.parchg) return;
+  document.getElementById('vmin').value = '';
+  document.getElementById('vmax').value = '';
+  generate();
+};
+
+// Cmap: only re-renders, no recompute (python: cmap_changed calls on_show only)
+document.getElementById('cmap').onchange = () => {
+  if (!state.rawData) return;
+  const p       = state.parchg;
+  const isoMode = parseInt(document.getElementById('iso-mode').value);
+  const sigma   = parseFloat(document.getElementById('sigma').value) || 0;
+  const repeatX = Math.max(1, parseInt(document.getElementById('repeat-x').value) || 1);
+  const repeatY = Math.max(1, parseInt(document.getElementById('repeat-y').value) || 1);
+  const cmapName = document.getElementById('cmap').value;
+  const vminInput = parseFloat(document.getElementById('vmin').value);
+  const vmaxInput = parseFloat(document.getElementById('vmax').value);
+  const zcut = Math.min(parseInt(document.getElementById('zcut').value) || 50, p.NZ - 1);
+  finishRender(state.rawData, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, vminInput, vmaxInput);
+};
+
+// Vmin/vmax: only re-renders if both valid and vmin < vmax (python: on_show only)
+function tryRerender() {
+  if (!state.rawData) return;
+  const p       = state.parchg;
+  const isoMode = parseInt(document.getElementById('iso-mode').value);
+  const sigma   = parseFloat(document.getElementById('sigma').value) || 0;
+  const repeatX = Math.max(1, parseInt(document.getElementById('repeat-x').value) || 1);
+  const repeatY = Math.max(1, parseInt(document.getElementById('repeat-y').value) || 1);
+  const cmapName = document.getElementById('cmap').value;
+  const zcut    = Math.min(parseInt(document.getElementById('zcut').value) || 50, p.NZ - 1);
+  const vminInput = parseFloat(document.getElementById('vmin').value);
+  const vmaxInput = parseFloat(document.getElementById('vmax').value);
+  const vminEmpty = document.getElementById('vmin').value.trim() === '';
+  const vmaxEmpty = document.getElementById('vmax').value.trim() === '';
+  if (vminEmpty && vmaxEmpty) {
+    finishRender(state.rawData, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, NaN, NaN);
+  } else if (!isNaN(vminInput) && !isNaN(vmaxInput) && vminInput < vmaxInput) {
+    finishRender(state.rawData, p, isoMode, zcut, sigma, repeatX, repeatY, cmapName, vminInput, vmaxInput);
+  }
+}
+document.getElementById('vmin').onchange = tryRerender;
+document.getElementById('vmax').onchange = tryRerender;
+
+// Px/Py: store only — user must click Apply (python: rx_changed/ry_changed store only)
+
+// Save image
+document.getElementById('save-img-btn').onclick = () => {
+  const canvas = document.getElementById('stm-canvas');
+  const link = document.createElement('a');
+  const isoMode = parseInt(document.getElementById('iso-mode').value)===0?'H':'C';
+  const zcut = document.getElementById('zcut').value;
+  link.download = `STM_${isoMode}_${zcut}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+};
+
+// Save data
+document.getElementById('save-dat-btn').onclick = () => {
+  if(!state.stmData) return;
+  const p = state.parchg;
+  const {NX,NY} = state;
+  const rows = ['X Y Z'];
+  const ax = p.cell[0][0]/NX, bx = p.cell[1][0]/NY;
+  const ay = p.cell[0][1]/NX, by = p.cell[1][1]/NY;
+  for(let iy=0;iy<NY;iy++){
+    for(let ix=0;ix<NX;ix++){
+      const x=(ix*ax+iy*bx).toFixed(6);
+      const y=(ix*ay+iy*by).toFixed(6);
+      const z=state.stmData[iy*NX+ix].toExponential(6);
+      rows.push(`${x} ${y} ${z}`);
+    }
+  }
+  const blob = new Blob([rows.join('\n')],{type:'text/plain'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`STM_data.txt`;
+  a.click();
+};
+
+// ══════════════════════════════════════════════════════
+// Zoom
+// ══════════════════════════════════════════════════════
+document.getElementById('zoom-in-btn').onclick = () => { state.zoomScale = Math.min(state.zoomScale*1.3, 6); if(state.parchg) generate(); };
+document.getElementById('zoom-out-btn').onclick = () => { state.zoomScale = Math.max(state.zoomScale/1.3, 0.3); if(state.parchg) generate(); };
+document.getElementById('zoom-reset-btn').onclick = () => { state.zoomScale=1; if(state.parchg) generate(); };
+
+// ══════════════════════════════════════════════════════
+// Cursor info
+// ══════════════════════════════════════════════════════
+document.getElementById('stm-canvas').onmousemove = (e) => {
+  if(!state.stmData || !state.coords) return;
+  const canvas = document.getElementById('stm-canvas');
+  const rect = canvas.getBoundingClientRect();
+  const fx = (e.clientX - rect.left)  / rect.width;
+  const fy = (e.clientY - rect.top)   / rect.height;
+  const {M00, M10, M01, M11, det, xmin, xmax, ymin, ymax, NX, NY} = state.coords;
+  // real-space position (y flipped: fy=0 → ymax)
+  const rx = xmin + fx * (xmax - xmin);
+  const ry = ymax - fy * (ymax - ymin);
+  // invert M
+  const ixf = ( rx*M11 - ry*M01) / det;
+  const iyf = (-rx*M10 + ry*M00) / det;
+  const ix = ((Math.floor(ixf) % NX) + NX) % NX;
+  const iy = ((Math.floor(iyf) % NY) + NY) % NY;
+  const val = state.stmData[ix * NY + iy];
+  const info = document.getElementById('cursor-info');
+  info.textContent = `x: ${rx.toFixed(2)} Å   y: ${ry.toFixed(2)} Å   val: ${val.toExponential(3)}`;
+  info.style.opacity = '1';
+};
+document.getElementById('stm-canvas').onmouseleave = () => {
+  document.getElementById('cursor-info').style.opacity='0';
+};
+
+// Re-scale canvas on window resize
+window.addEventListener('resize', () => {
+  if(!state.parchg || !state.stmData) return;
+  const canvas = document.getElementById('stm-canvas');
+  if(!canvas.width) return;
+  const container = document.getElementById('stm-canvas-container');
+  const availW = container.clientWidth  || 600;
+  const availH = container.clientHeight || 600;
+  const sc = Math.min(availW / canvas.width, availH / canvas.height) * state.zoomScale;
+  canvas.style.width  = Math.round(canvas.width  * sc) + 'px';
+  canvas.style.height = Math.round(canvas.height * sc) + 'px';
+  // Resize colorbar to match
+  const cbCanvas = document.getElementById('colorbar-canvas');
+  const cbH = Math.round(canvas.height * sc);
+  if(cbH !== cbCanvas.height) {
+    cbCanvas.height = Math.max(cbH, 60);
+    const lut = getLUT(document.getElementById('cmap').value);
+    renderColorbar(cbCanvas, lut);
+  }
+});
+</script>
+</body>
+</html>
